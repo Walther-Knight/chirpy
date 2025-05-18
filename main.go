@@ -1,20 +1,15 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
+	"log"
+
+	"github.com/Walther-Knight/chirpy/internal/server"
 )
 
 func main() {
-	newMux := http.NewServeMux()
-	httpSrv := &http.Server{
-		Handler: newMux,
-		Addr:    ":8080",
-	}
-
-	err := httpSrv.ListenAndServe()
-	if err != nil {
-		fmt.Printf("error starting http server: %v", err)
+	errHttpStart := server.Start()
+	if errHttpStart != nil {
+		log.Printf("Error starting server: %v\n", errHttpStart)
 	}
 
 }
