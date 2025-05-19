@@ -3,6 +3,8 @@ package server
 import (
 	"log"
 	"net/http"
+
+	"github.com/Walther-Knight/chirpy/internal/middleware"
 )
 
 func Start() error {
@@ -11,9 +13,12 @@ func Start() error {
 		Handler: newMux,
 		Addr:    ":8080",
 	}
+	var hitCount middleware.ApiConfig
 	log.Println("Starting handlers...")
-	newMux.HandleFunc("/healthz", health)
-	newMux.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir("./static"))))
+	newMux.HandleFunc("GET /healthz", health)
+	newMux.HandleFunc("GET /metrics", hitCount.HitTotal)
+	newMux.HandleFunc("POST /reset", hitCount.HitReset)
+	newMux.Handle("/app/", hitCount.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("./static")))))
 
 	log.Printf("Starting http server on %s\n", httpSrv.Addr)
 	return httpSrv.ListenAndServe()
