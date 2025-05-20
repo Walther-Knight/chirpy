@@ -153,7 +153,8 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 				Error: "invalid email submitted",
 			}
 		}
-	case strings.Index(params.Email, "@") < strings.Index(params.Email, ".") && strings.Count(params.Email, "@") == 1:
+	//basic email formatting checks
+	case strings.Index(params.Email, "@") < strings.LastIndex(params.Email, ".") && strings.Count(params.Email, "@") == 1 && strings.LastIndex(params.Email, ".") < len(params.Email)-2:
 		res, err := api.Db.CreateUser(r.Context(), database.CreateUserParams{
 			ID:        uuid.New(),
 			CreatedAt: time.Now(),
