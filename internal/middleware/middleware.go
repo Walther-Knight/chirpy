@@ -1,10 +1,11 @@
 package middleware
 
 import (
-	"fmt"
+	"bytes"
 	"log"
 	"net/http"
 	"sync/atomic"
+	"text/template"
 )
 
 type ApiConfig struct {
@@ -19,12 +20,29 @@ func (cfg *ApiConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
 
 }
 
+type hitVariables struct {
+	HitTotal int32
+}
+
+var metricsTemplate = template.Must(template.ParseFiles("./static/templates/admin/metrics.html"))
+
 func (cfg *ApiConfig) HitTotal(w http.ResponseWriter, r *http.Request) {
-	hits := cfg.FileserverHits.Load()
+	hits := hitVariables{
+		HitTotal: cfg.FileserverHits.Load(),
+	}
 	log.Printf("HitTotal endpoint hit. Total Hits: %d\n", hits)
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	var buf bytes.Buffer
+	err := metricsTemplate.Execute(&buf, hits)
+	if err != nil {
+		log.Printf("Error with template: %v\n", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Hits: %d", hits)))
+	buf.WriteTo(w)
 }
 
 func (cfg *ApiConfig) HitReset(w http.ResponseWriter, r *http.Request) {
