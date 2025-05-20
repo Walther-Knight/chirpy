@@ -5,6 +5,12 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/Walther-Knight/chirpy/internal/database"
+	"github.com/Walther-Knight/chirpy/internal/middleware"
+	"github.com/Walther-Knight/chirpy/internal/models"
+	"github.com/google/uuid"
 )
 
 func decodeJSONBody(r *http.Request, v any) error {
@@ -62,10 +68,6 @@ func Validate(w http.ResponseWriter, r *http.Request) {
 		CleanedBody string `json:"cleaned_body"`
 	}
 
-	type validRes struct {
-		Valid bool `json:"valid"`
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	params := validateBody{}
 	errDecode := decodeJSONBody(r, &params)
@@ -117,4 +119,68 @@ func Validate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
+	type validEmail struct {
+		Email string `json:"email"`
+	}
+
+	type errorBody struct {
+		Error string `json:"error"`
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	params := validEmail{}
+	errDecode := decodeJSONBody(r, &params)
+	if errDecode != nil {
+		log.Printf("Error decoding parameters: %s", errDecode)
+		w.WriteHeader(http.StatusBadRequest)
+		decodeError := errorBody{
+			Error: "Something went wrong",
+		}
+		marshalJSON(w, decodeError)
+		return
+	}
+
+	var ResJson any
+	switch {
+	//case for minimum possible email length a@a.aa
+	case len(params.Email) < 5:
+		{
+			w.WriteHeader(http.StatusBadRequest)
+			ResJson = errorBody{
+				Error: "invalid email submitted",
+			}
+		}
+	case strings.Index(params.Email, "@") < strings.Index(params.Email, ".") && strings.Count(params.Email, "@") == 1:
+		res, err := api.Db.CreateUser(r.Context(), database.CreateUserParams{
+			ID:        uuid.New(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Email:     params.Email,
+		})
+		if err != nil {
+			log.Printf("Error on database: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"database error reported"}`))
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		ResJson = models.User{
+			ID:        res.ID,
+			CreatedAt: res.CreatedAt,
+			UpdatedAt: res.UpdatedAt,
+			Email:     res.Email,
+		}
+		log.Printf("User: %s created with ID %v", res.Email, res.ID)
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		ResJson = errorBody{
+			Error: "invalid email submitted",
+		}
+
+	}
+
+	marshalJSON(w, ResJson)
 }

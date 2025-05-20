@@ -1,2 +1,6 @@
+.env
 out
 test.http
+testdb.sh
+gooseup.sh
+goosedown.sh

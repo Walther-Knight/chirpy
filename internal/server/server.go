@@ -8,21 +8,21 @@ import (
 	"github.com/Walther-Knight/chirpy/internal/middleware"
 )
 
-func Start() error {
+func Start(cfg *middleware.ApiConfig) error {
 	newMux := http.NewServeMux()
 	httpSrv := &http.Server{
 		Handler: newMux,
 		Addr:    ":8080",
 	}
-	var hitCount middleware.ApiConfig
 	log.Println("Starting handlers...")
 	//admin functions
 	newMux.HandleFunc("GET /api/healthz", api.Health)
-	newMux.HandleFunc("GET /admin/metrics", hitCount.HitTotal)
-	newMux.HandleFunc("POST /admin/reset", hitCount.HitReset)
+	newMux.HandleFunc("GET /admin/metrics", cfg.HitTotal)
+	newMux.HandleFunc("POST /admin/reset", cfg.Reset)
 	//application functions
-	newMux.Handle("/app/", hitCount.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("./static")))))
+	newMux.Handle("/app/", cfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("./static")))))
 	newMux.HandleFunc("POST /api/validate_chirp", api.Validate)
+	newMux.HandleFunc("POST /api/users", func(w http.ResponseWriter, r *http.Request) { api.NewUser(cfg, w, r) })
 
 	log.Printf("Starting http server on %s\n", httpSrv.Addr)
 	return httpSrv.ListenAndServe()

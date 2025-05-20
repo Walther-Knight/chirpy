@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"sync/atomic"
 	"text/template"
+
+	"github.com/Walther-Knight/chirpy/internal/database"
 )
 
 type ApiConfig struct {
 	FileserverHits atomic.Int32
+	Db             *database.Queries
 }
 
 func (cfg *ApiConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
@@ -45,10 +48,16 @@ func (cfg *ApiConfig) HitTotal(w http.ResponseWriter, r *http.Request) {
 	buf.WriteTo(w)
 }
 
-func (cfg *ApiConfig) HitReset(w http.ResponseWriter, r *http.Request) {
+func (cfg *ApiConfig) Reset(w http.ResponseWriter, r *http.Request) {
 	cfg.FileserverHits.Store(0)
 	log.Println("HitTotal Reset endpoint hit.")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
+	err := cfg.Db.DeleteAllUsers(r.Context())
+	if err != nil {
+		log.Printf("User table reset failed: %s", err)
+	} else {
+		log.Println("User table reset.")
+	}
 }
