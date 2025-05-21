@@ -21,7 +21,7 @@ func Start(cfg *middleware.ApiConfig) error {
 	newMux.HandleFunc("POST /admin/reset", cfg.Reset)
 	//application functions
 	newMux.Handle("/app/", cfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("./static")))))
-	newMux.HandleFunc("POST /api/validate_chirp", api.Validate)
+	newMux.HandleFunc("POST /api/chirps", func(w http.ResponseWriter, r *http.Request) { api.NewChirp(cfg, w, r) })
 	newMux.HandleFunc("POST /api/users", func(w http.ResponseWriter, r *http.Request) { api.NewUser(cfg, w, r) })
 
 	log.Printf("Starting http server on %s\n", httpSrv.Addr)
