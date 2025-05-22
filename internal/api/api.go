@@ -146,6 +146,54 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 
 }
 
+func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
+	type errorBody struct {
+		Error string `json:"error"`
+	}
+
+	type responseJSON struct {
+		ID        string    `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserID    string    `json:"user_id"`
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	var StatusCode = http.StatusOK
+
+	res, err := api.Db.GetAllChirps(r.Context())
+	if err != nil {
+		log.Printf("Error on database: %v", err)
+		StatusCode = http.StatusInternalServerError
+		errorRes := errorBody{
+			Error: "database error reported",
+		}
+		w.WriteHeader(StatusCode)
+		marshalJSON(w, errorRes)
+		return
+	}
+	ResJson := []responseJSON{}
+	for _, chirp := range res {
+		json := responseJSON{
+			ID:        chirp.ID.String(),
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserID:    chirp.UserID.String(),
+		}
+		ResJson = append(ResJson, json)
+	}
+
+	w.WriteHeader(StatusCode)
+	err = marshalJSON(w, ResJson)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+		return
+	}
+}
+
 func validateEmail(s string) bool {
 	if !(strings.Index(s, "@") < strings.LastIndex(s, ".")) {
 		return false
