@@ -60,10 +60,6 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 		UserID string `json:"user_id"`
 	}
 
-	type errorBody struct {
-		Error string `json:"error"`
-	}
-
 	type responseJSON struct {
 		ID        string    `json:"id"`
 		CreatedAt time.Time `json:"created_at"`
@@ -83,21 +79,21 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 		{
 			log.Printf("Error decoding parameters: %s", errDecode)
 			StatusCode = http.StatusBadRequest
-			ResJson = errorBody{
+			ResJson = models.ErrorBody{
 				Error: "error decoding JSON",
 			}
 		}
 	case len(params.Body) > 140:
 		{
 			StatusCode = http.StatusBadRequest
-			ResJson = errorBody{
+			ResJson = models.ErrorBody{
 				Error: "Chirp is too long",
 			}
 		}
 	case params.Body == "":
 		{
 			StatusCode = http.StatusBadRequest
-			ResJson = errorBody{
+			ResJson = models.ErrorBody{
 				Error: "Chirp must contain characters",
 			}
 		}
@@ -107,7 +103,7 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 			if err != nil {
 				log.Printf("Invalid user_id format: %v", err)
 				StatusCode = http.StatusBadRequest
-				ResJson = errorBody{
+				ResJson = models.ErrorBody{
 					Error: "invalid user_id format",
 				}
 			} else {
@@ -121,7 +117,7 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 				if err != nil {
 					log.Printf("Error on database: %v", err)
 					StatusCode = http.StatusInternalServerError
-					ResJson = errorBody{
+					ResJson = models.ErrorBody{
 						Error: "database error reported",
 					}
 				} else {
@@ -149,9 +145,6 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 }
 
 func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
-	type errorBody struct {
-		Error string `json:"error"`
-	}
 
 	type responseJSON struct {
 		ID        string    `json:"id"`
@@ -168,7 +161,7 @@ func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		log.Printf("Error on database: %v", err)
 		StatusCode = http.StatusInternalServerError
-		errorRes := errorBody{
+		errorRes := models.ErrorBody{
 			Error: "database error reported",
 		}
 		w.WriteHeader(StatusCode)
@@ -176,7 +169,7 @@ func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			log.Printf("Error on database: %v", err)
 			StatusCode = http.StatusInternalServerError
-			errorRes := errorBody{
+			errorRes := models.ErrorBody{
 				Error: "database error reported",
 			}
 			w.WriteHeader(StatusCode)
@@ -212,9 +205,6 @@ func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Requ
 }
 
 func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
-	type errorBody struct {
-		Error string `json:"error"`
-	}
 
 	type responseJSON struct {
 		ID        string    `json:"id"`
@@ -232,7 +222,7 @@ func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 		log.Printf("chirpID: %v", chirpID)
 		log.Printf("Error on database: %v", err)
 		StatusCode = http.StatusInternalServerError
-		errorRes := errorBody{
+		errorRes := models.ErrorBody{
 			Error: "database error reported",
 		}
 		w.WriteHeader(StatusCode)
@@ -256,7 +246,7 @@ func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 		}
 		log.Printf("Error on database: %v", err)
 		StatusCode = http.StatusInternalServerError
-		errorRes := errorBody{
+		errorRes := models.ErrorBody{
 			Error: "database error reported",
 		}
 		w.WriteHeader(StatusCode)
@@ -305,10 +295,6 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 		Email    string `json:"email"`
 	}
 
-	type errorBody struct {
-		Error string `json:"error"`
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	params := reqParams{}
 	errDecode := decodeJSONBody(r, &params)
@@ -320,7 +306,7 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 		{
 			log.Printf("Error decoding parameters: %s", errDecode)
 			StatusCode = http.StatusBadRequest
-			ResJson = errorBody{
+			ResJson = models.ErrorBody{
 				Error: "error decoding JSON",
 			}
 		}
@@ -328,7 +314,7 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 	case len(params.Email) < 5:
 		{
 			StatusCode = http.StatusBadRequest
-			ResJson = errorBody{
+			ResJson = models.ErrorBody{
 				Error: "invalid email submitted",
 			}
 		}
@@ -336,14 +322,14 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 	case !validateEmail(params.Email):
 		{
 			StatusCode = http.StatusBadRequest
-			ResJson = errorBody{
+			ResJson = models.ErrorBody{
 				Error: "invalid email submitted",
 			}
 		}
 	default:
 		pwd, errHash := auth.HashPassword(params.Password)
 		if errHash != nil {
-			ResJson = errorBody{
+			ResJson = models.ErrorBody{
 				Error: "error hashing password",
 			}
 		} else {
@@ -357,7 +343,7 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 			if err != nil {
 				log.Printf("Error on database: %v", err)
 				StatusCode = http.StatusInternalServerError
-				ResJson = errorBody{
+				ResJson = models.ErrorBody{
 					Error: "database error reported",
 				}
 			} else {
@@ -388,17 +374,6 @@ func UserLogin(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request
 		Email    string `json:"email"`
 	}
 
-	type errorBody struct {
-		Error string `json:"error"`
-	}
-
-	type resParams struct {
-		ID        string    `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Email     string    `json:"email"`
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	params := reqParams{}
 	errDecode := decodeJSONBody(r, &params)
@@ -410,7 +385,7 @@ func UserLogin(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request
 		{
 			log.Printf("Error decoding parameters: %s", errDecode)
 			StatusCode = http.StatusBadRequest
-			ResJson = errorBody{
+			ResJson = models.ErrorBody{
 				Error: "error decoding JSON",
 			}
 		}
@@ -419,20 +394,20 @@ func UserLogin(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request
 		if err != nil {
 			log.Printf("Error on database: %v", err)
 			StatusCode = http.StatusInternalServerError
-			ResJson = errorBody{
+			ResJson = models.ErrorBody{
 				Error: "database error reported",
 			}
 		} else {
 			err = auth.CheckPasswordHash(userInfo.HashedPassword, params.Password)
 			if err != nil {
 				StatusCode = http.StatusUnauthorized
-				ResJson = errorBody{
+				ResJson = models.ErrorBody{
 					Error: "Incorrect email or password",
 				}
 			} else {
 				StatusCode = http.StatusOK
-				ResJson = resParams{
-					ID:        userInfo.ID.String(),
+				ResJson = models.User{
+					ID:        userInfo.ID,
 					CreatedAt: userInfo.CreatedAt,
 					UpdatedAt: userInfo.UpdatedAt,
 					Email:     userInfo.Email,

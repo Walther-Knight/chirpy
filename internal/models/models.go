@@ -7,8 +7,21 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
+	ID             uuid.UUID `json:"id"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	Email          string    `json:"email"`
+	HashedPassword string    `json:"password"`
+}
+
+type ErrorBody struct {
+	Error string `json:"error"`
+}
+
+type Chirp struct {
+	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	Body      string    `json:"body"`
+	UserID    string    `json:"user_id"`
 }
