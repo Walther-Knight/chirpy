@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -170,9 +171,24 @@ func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Requ
 			Error: "database error reported",
 		}
 		w.WriteHeader(StatusCode)
-		marshalJSON(w, errorRes)
-		return
+		err = marshalJSON(w, errorRes)
+		if err != nil {
+			log.Printf("Error on database: %v", err)
+			StatusCode = http.StatusInternalServerError
+			errorRes := errorBody{
+				Error: "database error reported",
+			}
+			w.WriteHeader(StatusCode)
+			err = marshalJSON(w, errorRes)
+			if err != nil {
+				log.Printf("Error marshalling JSON: %s", err)
+				w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+				return
+			}
+			return
+		}
 	}
+
 	ResJson := []responseJSON{}
 	for _, chirp := range res {
 		json := responseJSON{
@@ -183,6 +199,81 @@ func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Requ
 			UserID:    chirp.UserID.String(),
 		}
 		ResJson = append(ResJson, json)
+	}
+
+	w.WriteHeader(StatusCode)
+	err = marshalJSON(w, ResJson)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+		return
+	}
+}
+
+func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
+	type errorBody struct {
+		Error string `json:"error"`
+	}
+
+	type responseJSON struct {
+		ID        string    `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserID    string    `json:"user_id"`
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	var StatusCode = http.StatusOK
+
+	chirpID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		log.Printf("chirpID: %v", chirpID)
+		log.Printf("Error on database: %v", err)
+		StatusCode = http.StatusInternalServerError
+		errorRes := errorBody{
+			Error: "database error reported",
+		}
+		w.WriteHeader(StatusCode)
+		err = marshalJSON(w, errorRes)
+		if err != nil {
+			log.Printf("Error marshalling JSON: %s", err)
+			w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+			return
+		}
+		return
+	}
+
+	res, err := api.Db.GetChirp(r.Context(), chirpID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Error on database: %v", err)
+			StatusCode = http.StatusNotFound
+			w.WriteHeader(StatusCode)
+			w.Write([]byte(`{"error: Chirp ID does not exist"}`))
+			return
+		}
+		log.Printf("Error on database: %v", err)
+		StatusCode = http.StatusInternalServerError
+		errorRes := errorBody{
+			Error: "database error reported",
+		}
+		w.WriteHeader(StatusCode)
+		err = marshalJSON(w, errorRes)
+		if err != nil {
+			log.Printf("Error marshalling JSON: %s", err)
+			w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+			return
+		}
+		return
+	}
+
+	ResJson := responseJSON{
+		ID:        res.ID.String(),
+		CreatedAt: res.CreatedAt,
+		UpdatedAt: res.UpdatedAt,
+		Body:      res.Body,
+		UserID:    res.UserID.String(),
 	}
 
 	w.WriteHeader(StatusCode)

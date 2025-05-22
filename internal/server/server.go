@@ -20,10 +20,11 @@ func Start(cfg *middleware.ApiConfig) error {
 	newMux.HandleFunc("GET /admin/metrics", cfg.HitTotal)
 	newMux.HandleFunc("POST /admin/reset", cfg.Reset)
 	//application functions
-	newMux.Handle("/app/", cfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("./static")))))
+	newMux.HandleFunc("GET /api/chirps/{id}", func(w http.ResponseWriter, r *http.Request) { api.GetChirp(cfg, w, r) })
 	newMux.HandleFunc("POST /api/chirps", func(w http.ResponseWriter, r *http.Request) { api.NewChirp(cfg, w, r) })
 	newMux.HandleFunc("GET /api/chirps", func(w http.ResponseWriter, r *http.Request) { api.GetAllChirps(cfg, w, r) })
 	newMux.HandleFunc("POST /api/users", func(w http.ResponseWriter, r *http.Request) { api.NewUser(cfg, w, r) })
+	newMux.Handle("/app/", cfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("./static")))))
 
 	log.Printf("Starting http server on %s\n", httpSrv.Addr)
 	return httpSrv.ListenAndServe()
