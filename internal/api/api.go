@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Walther-Knight/chirpy/internal/auth"
 	"github.com/Walther-Knight/chirpy/internal/database"
 	"github.com/Walther-Knight/chirpy/internal/middleware"
 	"github.com/Walther-Knight/chirpy/internal/models"
@@ -299,8 +300,9 @@ func validateEmail(s string) bool {
 }
 
 func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
-	type emailParams struct {
-		Email string `json:"email"`
+	type reqParams struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 
 	type errorBody struct {
@@ -308,7 +310,7 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	params := emailParams{}
+	params := reqParams{}
 	errDecode := decodeJSONBody(r, &params)
 
 	var ResJson any
@@ -339,12 +341,81 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 			}
 		}
 	default:
-		res, err := api.Db.CreateUser(r.Context(), database.CreateUserParams{
-			ID:        uuid.New(),
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-			Email:     params.Email,
-		})
+		pwd, errHash := auth.HashPassword(params.Password)
+		if errHash != nil {
+			ResJson = errorBody{
+				Error: "error hashing password",
+			}
+		} else {
+			res, err := api.Db.CreateUser(r.Context(), database.CreateUserParams{
+				ID:             uuid.New(),
+				CreatedAt:      time.Now(),
+				UpdatedAt:      time.Now(),
+				Email:          params.Email,
+				HashedPassword: pwd,
+			})
+			if err != nil {
+				log.Printf("Error on database: %v", err)
+				StatusCode = http.StatusInternalServerError
+				ResJson = errorBody{
+					Error: "database error reported",
+				}
+			} else {
+				StatusCode = http.StatusCreated
+				ResJson = models.User{
+					ID:        res.ID,
+					CreatedAt: res.CreatedAt,
+					UpdatedAt: res.UpdatedAt,
+					Email:     res.Email,
+				}
+				log.Printf("User: %s created with ID %v", res.Email, res.ID)
+			}
+		}
+	}
+
+	w.WriteHeader(StatusCode)
+	err := marshalJSON(w, ResJson)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+		return
+	}
+}
+
+func UserLogin(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
+	type reqParams struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+
+	type errorBody struct {
+		Error string `json:"error"`
+	}
+
+	type resParams struct {
+		ID        string    `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	params := reqParams{}
+	errDecode := decodeJSONBody(r, &params)
+
+	var ResJson any
+	var StatusCode = http.StatusOK
+	switch {
+	case errDecode != nil:
+		{
+			log.Printf("Error decoding parameters: %s", errDecode)
+			StatusCode = http.StatusBadRequest
+			ResJson = errorBody{
+				Error: "error decoding JSON",
+			}
+		}
+	default:
+		userInfo, err := api.Db.GetUserPassword(r.Context(), params.Email)
 		if err != nil {
 			log.Printf("Error on database: %v", err)
 			StatusCode = http.StatusInternalServerError
@@ -352,14 +423,21 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 				Error: "database error reported",
 			}
 		} else {
-			StatusCode = http.StatusCreated
-			ResJson = models.User{
-				ID:        res.ID,
-				CreatedAt: res.CreatedAt,
-				UpdatedAt: res.UpdatedAt,
-				Email:     res.Email,
+			err = auth.CheckPasswordHash(userInfo.HashedPassword, params.Password)
+			if err != nil {
+				StatusCode = http.StatusUnauthorized
+				ResJson = errorBody{
+					Error: "Incorrect email or password",
+				}
+			} else {
+				StatusCode = http.StatusOK
+				ResJson = resParams{
+					ID:        userInfo.ID.String(),
+					CreatedAt: userInfo.CreatedAt,
+					UpdatedAt: userInfo.UpdatedAt,
+					Email:     userInfo.Email,
+				}
 			}
-			log.Printf("User: %s created with ID %v", res.Email, res.ID)
 		}
 	}
 

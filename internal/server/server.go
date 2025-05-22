@@ -20,6 +20,7 @@ func Start(cfg *middleware.ApiConfig) error {
 	newMux.HandleFunc("GET /admin/metrics", cfg.HitTotal)
 	newMux.HandleFunc("POST /admin/reset", cfg.Reset)
 	//application functions
+	newMux.HandleFunc("POST /api/login", func(w http.ResponseWriter, r *http.Request) { api.UserLogin(cfg, w, r) })
 	newMux.HandleFunc("GET /api/chirps/{id}", func(w http.ResponseWriter, r *http.Request) { api.GetChirp(cfg, w, r) })
 	newMux.HandleFunc("POST /api/chirps", func(w http.ResponseWriter, r *http.Request) { api.NewChirp(cfg, w, r) })
 	newMux.HandleFunc("GET /api/chirps", func(w http.ResponseWriter, r *http.Request) { api.GetAllChirps(cfg, w, r) })
