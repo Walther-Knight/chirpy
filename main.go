@@ -21,7 +21,8 @@ func main() {
 	}
 	dbQueries := database.New(db)
 	cfg := middleware.ApiConfig{
-		Db: dbQueries,
+		Db:    dbQueries,
+		Token: os.Getenv("TOKEN_STRING"),
 	}
 
 	errHttpStart := server.Start(&cfg)

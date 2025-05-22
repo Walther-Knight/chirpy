@@ -56,16 +56,48 @@ func Health(w http.ResponseWriter, r *http.Request) {
 
 func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
 	type validateBody struct {
-		Body   string `json:"body"`
-		UserID string `json:"user_id"`
+		Body string `json:"body"`
 	}
 
-	type responseJSON struct {
-		ID        string    `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Body      string    `json:"body"`
-		UserID    string    `json:"user_id"`
+	var StatusCode = http.StatusOK
+
+	userToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		StatusCode = http.StatusUnauthorized
+		errorRes := models.ErrorBody{
+			Error: "unauthorized user, no token",
+		}
+		w.WriteHeader(StatusCode)
+		err := marshalJSON(w, errorRes)
+		if err != nil {
+			w.WriteHeader(StatusCode)
+			err = marshalJSON(w, errorRes)
+			if err != nil {
+				log.Printf("Error marshalling JSON: %s", err)
+				w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+				return
+			}
+			return
+		}
+	}
+	UserId, err := auth.ValidateJWT(userToken, api.Token)
+	if err != nil {
+		StatusCode = http.StatusUnauthorized
+		errorRes := models.ErrorBody{
+			Error: "unauthorized user, login and try again",
+		}
+		w.WriteHeader(StatusCode)
+		err := marshalJSON(w, errorRes)
+		if err != nil {
+			w.WriteHeader(StatusCode)
+			err = marshalJSON(w, errorRes)
+			if err != nil {
+				log.Printf("Error marshalling JSON: %s", err)
+				w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+				return
+			}
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -73,7 +105,6 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 	errDecode := decodeJSONBody(r, &params)
 
 	var ResJson any
-	var StatusCode = http.StatusOK
 	switch {
 	case errDecode != nil:
 		{
@@ -99,7 +130,6 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 		}
 	default:
 		{
-			userId, err := uuid.Parse(params.UserID)
 			if err != nil {
 				log.Printf("Invalid user_id format: %v", err)
 				StatusCode = http.StatusBadRequest
@@ -112,7 +142,7 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 					Body:      profanityFilter(params.Body),
-					UserID:    userId,
+					UserID:    UserId,
 				})
 				if err != nil {
 					log.Printf("Error on database: %v", err)
@@ -122,7 +152,7 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 					}
 				} else {
 					StatusCode = http.StatusCreated
-					ResJson = responseJSON{
+					ResJson = models.Chirp{
 						ID:        res.ID.String(),
 						CreatedAt: res.CreatedAt,
 						UpdatedAt: res.UpdatedAt,
@@ -135,7 +165,7 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 	}
 
 	w.WriteHeader(StatusCode)
-	err := marshalJSON(w, ResJson)
+	err = marshalJSON(w, ResJson)
 	if err != nil {
 		log.Printf("Error marshalling JSON: %s", err)
 		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
@@ -145,14 +175,6 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 }
 
 func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
-
-	type responseJSON struct {
-		ID        string    `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Body      string    `json:"body"`
-		UserID    string    `json:"user_id"`
-	}
 
 	w.Header().Set("Content-Type", "application/json")
 	var StatusCode = http.StatusOK
@@ -183,9 +205,9 @@ func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	ResJson := []responseJSON{}
+	ResJson := []models.Chirp{}
 	for _, chirp := range res {
-		json := responseJSON{
+		json := models.Chirp{
 			ID:        chirp.ID.String(),
 			CreatedAt: chirp.CreatedAt,
 			UpdatedAt: chirp.UpdatedAt,
@@ -206,16 +228,47 @@ func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Requ
 
 func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
 
-	type responseJSON struct {
-		ID        string    `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Body      string    `json:"body"`
-		UserID    string    `json:"user_id"`
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	var StatusCode = http.StatusOK
+
+	userToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		StatusCode = http.StatusUnauthorized
+		errorRes := models.ErrorBody{
+			Error: "unauthorized user, login and try again",
+		}
+		w.WriteHeader(StatusCode)
+		err := marshalJSON(w, errorRes)
+		if err != nil {
+			w.WriteHeader(StatusCode)
+			err = marshalJSON(w, errorRes)
+			if err != nil {
+				log.Printf("Error marshalling JSON: %s", err)
+				w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+				return
+			}
+			return
+		}
+	}
+	_, err = auth.ValidateJWT(userToken, api.Token)
+	if err != nil {
+		StatusCode = http.StatusUnauthorized
+		errorRes := models.ErrorBody{
+			Error: "unauthorized user, login and try again",
+		}
+		w.WriteHeader(StatusCode)
+		err := marshalJSON(w, errorRes)
+		if err != nil {
+			w.WriteHeader(StatusCode)
+			err = marshalJSON(w, errorRes)
+			if err != nil {
+				log.Printf("Error marshalling JSON: %s", err)
+				w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+				return
+			}
+			return
+		}
+	}
 
 	chirpID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
@@ -259,7 +312,7 @@ func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ResJson := responseJSON{
+	ResJson := models.Chirp{
 		ID:        res.ID.String(),
 		CreatedAt: res.CreatedAt,
 		UpdatedAt: res.UpdatedAt,
@@ -370,14 +423,14 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 
 func UserLogin(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
 	type reqParams struct {
-		Password string `json:"password"`
-		Email    string `json:"email"`
+		Password         string `json:"password"`
+		Email            string `json:"email"`
+		ExpiresInSeconds int    `json:"expires_in_seconds"`
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	params := reqParams{}
 	errDecode := decodeJSONBody(r, &params)
-
 	var ResJson any
 	var StatusCode = http.StatusOK
 	switch {
@@ -405,12 +458,25 @@ func UserLogin(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request
 					Error: "Incorrect email or password",
 				}
 			} else {
-				StatusCode = http.StatusOK
-				ResJson = models.User{
-					ID:        userInfo.ID,
-					CreatedAt: userInfo.CreatedAt,
-					UpdatedAt: userInfo.UpdatedAt,
-					Email:     userInfo.Email,
+				ExpiresIn := 1 * time.Hour
+				if params.ExpiresInSeconds != 0 {
+					ExpiresIn = time.Duration(params.ExpiresInSeconds * int(time.Second))
+				}
+				newToken, err := auth.MakeJWT(userInfo.ID, api.Token, ExpiresIn)
+				if err != nil {
+					StatusCode = http.StatusInternalServerError
+					ResJson = models.ErrorBody{
+						Error: "bearer token creation failed",
+					}
+				} else {
+					StatusCode = http.StatusOK
+					ResJson = models.User{
+						ID:        userInfo.ID,
+						CreatedAt: userInfo.CreatedAt,
+						UpdatedAt: userInfo.UpdatedAt,
+						Email:     userInfo.Email,
+						Token:     newToken,
+					}
 				}
 			}
 		}

@@ -12,6 +12,7 @@ type User struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 	Email          string    `json:"email"`
 	HashedPassword string    `json:"password"`
+	Token          string    `json:"token"`
 }
 
 type ErrorBody struct {
