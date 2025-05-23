@@ -29,6 +29,30 @@ func marshalJSON(w http.ResponseWriter, v any) error {
 	return nil
 }
 
+func writeErrorResponse(w http.ResponseWriter, status int, message string) {
+	errorJSON := models.ErrorBody{
+		Error: message,
+	}
+
+	w.WriteHeader(status)
+	err := marshalJSON(w, errorJSON)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+		return
+	}
+}
+
+func writeSuccessResponse(w http.ResponseWriter, status int, data any) {
+	w.WriteHeader(status)
+	err := marshalJSON(w, data)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+		return
+	}
+}
+
 // removed bool lesson 5:6 and filtered bool var and filtered return
 func profanityFilter(s string) string {
 	splitString := strings.Split(s, " ")
@@ -59,232 +83,111 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 		Body string `json:"body"`
 	}
 
-	var StatusCode = http.StatusOK
+	w.Header().Set("Content-Type", "application/json")
 
 	userToken, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		StatusCode = http.StatusUnauthorized
-		errorRes := models.ErrorBody{
-			Error: "unauthorized user, no token",
-		}
-		w.WriteHeader(StatusCode)
-		err := marshalJSON(w, errorRes)
-		if err != nil {
-			w.WriteHeader(StatusCode)
-			err = marshalJSON(w, errorRes)
-			if err != nil {
-				log.Printf("Error marshalling JSON: %s", err)
-				w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
-				return
-			}
-			return
-		}
-	}
-	UserId, err := auth.ValidateJWT(userToken, api.Token)
-	if err != nil {
-		StatusCode = http.StatusUnauthorized
-		errorRes := models.ErrorBody{
-			Error: "unauthorized user, login and try again",
-		}
-		w.WriteHeader(StatusCode)
-		err := marshalJSON(w, errorRes)
-		if err != nil {
-			w.WriteHeader(StatusCode)
-			err = marshalJSON(w, errorRes)
-			if err != nil {
-				log.Printf("Error marshalling JSON: %s", err)
-				w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
-				return
-			}
-			return
-		}
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized user, no token")
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	UserId, err := auth.ValidateJWT(userToken, api.Token)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized user, invalid token")
+		return
+	}
+
 	params := validateBody{}
 	errDecode := decodeJSONBody(r, &params)
 
 	var ResJson any
-	switch {
-	case errDecode != nil:
-		{
-			log.Printf("Error decoding parameters: %s", errDecode)
-			StatusCode = http.StatusBadRequest
-			ResJson = models.ErrorBody{
-				Error: "error decoding JSON",
-			}
-		}
-	case len(params.Body) > 140:
-		{
-			StatusCode = http.StatusBadRequest
-			ResJson = models.ErrorBody{
-				Error: "Chirp is too long",
-			}
-		}
-	case params.Body == "":
-		{
-			StatusCode = http.StatusBadRequest
-			ResJson = models.ErrorBody{
-				Error: "Chirp must contain characters",
-			}
-		}
-	default:
-		{
-			if err != nil {
-				log.Printf("Invalid user_id format: %v", err)
-				StatusCode = http.StatusBadRequest
-				ResJson = models.ErrorBody{
-					Error: "invalid user_id format",
-				}
-			} else {
-				res, err := api.Db.CreateChirp(r.Context(), database.CreateChirpParams{
-					ID:        uuid.New(),
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
-					Body:      profanityFilter(params.Body),
-					UserID:    UserId,
-				})
-				if err != nil {
-					log.Printf("Error on database: %v", err)
-					StatusCode = http.StatusInternalServerError
-					ResJson = models.ErrorBody{
-						Error: "database error reported",
-					}
-				} else {
-					StatusCode = http.StatusCreated
-					ResJson = models.Chirp{
-						ID:        res.ID.String(),
-						CreatedAt: res.CreatedAt,
-						UpdatedAt: res.UpdatedAt,
-						Body:      res.Body,
-						UserID:    res.UserID.String(),
-					}
-				}
-			}
-		}
-	}
 
-	w.WriteHeader(StatusCode)
-	err = marshalJSON(w, ResJson)
-	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+	if errDecode != nil {
+		log.Printf("Error decoding parameters: %s", errDecode)
+		writeErrorResponse(w, http.StatusBadRequest, "error decoding JSON")
 		return
 	}
 
+	if len(params.Body) > 140 {
+		writeErrorResponse(w, http.StatusBadRequest, "Chirp is too long")
+		return
+	}
+
+	if params.Body == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "Chirp must contain characters")
+		return
+	}
+
+	res, err := api.Db.CreateChirp(r.Context(), database.CreateChirpParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Body:      profanityFilter(params.Body),
+		UserID:    UserId,
+	})
+	if err != nil {
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	ResJson = models.Chirp{
+		ID:        res.ID.String(),
+		CreatedAt: res.CreatedAt,
+		UpdatedAt: res.UpdatedAt,
+		Body:      res.Body,
+		UserID:    res.UserID.String(),
+	}
+
+	writeSuccessResponse(w, http.StatusCreated, ResJson)
 }
 
 func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
-	var StatusCode = http.StatusOK
 
 	res, err := api.Db.GetAllChirps(r.Context())
 	if err != nil {
 		log.Printf("Error on database: %v", err)
-		StatusCode = http.StatusInternalServerError
-		errorRes := models.ErrorBody{
-			Error: "database error reported",
-		}
-		w.WriteHeader(StatusCode)
-		err = marshalJSON(w, errorRes)
-		if err != nil {
-			log.Printf("Error on database: %v", err)
-			StatusCode = http.StatusInternalServerError
-			errorRes := models.ErrorBody{
-				Error: "database error reported",
-			}
-			w.WriteHeader(StatusCode)
-			err = marshalJSON(w, errorRes)
-			if err != nil {
-				log.Printf("Error marshalling JSON: %s", err)
-				w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
-				return
-			}
-			return
-		}
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
 	}
 
 	ResJson := []models.Chirp{}
 	for _, chirp := range res {
-		json := models.Chirp{
+		chirpModel := models.Chirp{
 			ID:        chirp.ID.String(),
 			CreatedAt: chirp.CreatedAt,
 			UpdatedAt: chirp.UpdatedAt,
 			Body:      chirp.Body,
 			UserID:    chirp.UserID.String(),
 		}
-		ResJson = append(ResJson, json)
+		ResJson = append(ResJson, chirpModel)
 	}
 
-	w.WriteHeader(StatusCode)
-	err = marshalJSON(w, ResJson)
-	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
-		return
-	}
+	writeSuccessResponse(w, http.StatusOK, ResJson)
 }
 
 func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
-	var StatusCode = http.StatusOK
 
 	userToken, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		StatusCode = http.StatusUnauthorized
-		errorRes := models.ErrorBody{
-			Error: "unauthorized user, login and try again",
-		}
-		w.WriteHeader(StatusCode)
-		err := marshalJSON(w, errorRes)
-		if err != nil {
-			w.WriteHeader(StatusCode)
-			err = marshalJSON(w, errorRes)
-			if err != nil {
-				log.Printf("Error marshalling JSON: %s", err)
-				w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
-				return
-			}
-			return
-		}
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized user, login and try again")
+		return
 	}
+
 	_, err = auth.ValidateJWT(userToken, api.Token)
 	if err != nil {
-		StatusCode = http.StatusUnauthorized
-		errorRes := models.ErrorBody{
-			Error: "unauthorized user, login and try again",
-		}
-		w.WriteHeader(StatusCode)
-		err := marshalJSON(w, errorRes)
-		if err != nil {
-			w.WriteHeader(StatusCode)
-			err = marshalJSON(w, errorRes)
-			if err != nil {
-				log.Printf("Error marshalling JSON: %s", err)
-				w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
-				return
-			}
-			return
-		}
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized user, login and try again")
+		return
 	}
 
 	chirpID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		log.Printf("chirpID: %v", chirpID)
 		log.Printf("Error on database: %v", err)
-		StatusCode = http.StatusInternalServerError
-		errorRes := models.ErrorBody{
-			Error: "database error reported",
-		}
-		w.WriteHeader(StatusCode)
-		err = marshalJSON(w, errorRes)
-		if err != nil {
-			log.Printf("Error marshalling JSON: %s", err)
-			w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
-			return
-		}
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
 		return
 	}
 
@@ -292,23 +195,11 @@ func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("Error on database: %v", err)
-			StatusCode = http.StatusNotFound
-			w.WriteHeader(StatusCode)
-			w.Write([]byte(`{"error: Chirp ID does not exist"}`))
+			writeErrorResponse(w, http.StatusNotFound, "error: Chirp ID does not exist")
 			return
 		}
 		log.Printf("Error on database: %v", err)
-		StatusCode = http.StatusInternalServerError
-		errorRes := models.ErrorBody{
-			Error: "database error reported",
-		}
-		w.WriteHeader(StatusCode)
-		err = marshalJSON(w, errorRes)
-		if err != nil {
-			log.Printf("Error marshalling JSON: %s", err)
-			w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
-			return
-		}
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
 		return
 	}
 
@@ -320,13 +211,7 @@ func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 		UserID:    res.UserID.String(),
 	}
 
-	w.WriteHeader(StatusCode)
-	err = marshalJSON(w, ResJson)
-	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
-		return
-	}
+	writeSuccessResponse(w, http.StatusOK, ResJson)
 }
 
 func validateEmail(s string) bool {
@@ -352,141 +237,190 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 	params := reqParams{}
 	errDecode := decodeJSONBody(r, &params)
 
-	var ResJson any
-	var StatusCode = http.StatusOK
-	switch {
-	case errDecode != nil:
-		{
-			log.Printf("Error decoding parameters: %s", errDecode)
-			StatusCode = http.StatusBadRequest
-			ResJson = models.ErrorBody{
-				Error: "error decoding JSON",
-			}
-		}
-	//case for minimum possible email length a@a.aa
-	case len(params.Email) < 5:
-		{
-			StatusCode = http.StatusBadRequest
-			ResJson = models.ErrorBody{
-				Error: "invalid email submitted",
-			}
-		}
-	//basic email formatting checks
-	case !validateEmail(params.Email):
-		{
-			StatusCode = http.StatusBadRequest
-			ResJson = models.ErrorBody{
-				Error: "invalid email submitted",
-			}
-		}
-	default:
-		pwd, errHash := auth.HashPassword(params.Password)
-		if errHash != nil {
-			ResJson = models.ErrorBody{
-				Error: "error hashing password",
-			}
-		} else {
-			res, err := api.Db.CreateUser(r.Context(), database.CreateUserParams{
-				ID:             uuid.New(),
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
-				Email:          params.Email,
-				HashedPassword: pwd,
-			})
-			if err != nil {
-				log.Printf("Error on database: %v", err)
-				StatusCode = http.StatusInternalServerError
-				ResJson = models.ErrorBody{
-					Error: "database error reported",
-				}
-			} else {
-				StatusCode = http.StatusCreated
-				ResJson = models.User{
-					ID:        res.ID,
-					CreatedAt: res.CreatedAt,
-					UpdatedAt: res.UpdatedAt,
-					Email:     res.Email,
-				}
-				log.Printf("User: %s created with ID %v", res.Email, res.ID)
-			}
-		}
-	}
-
-	w.WriteHeader(StatusCode)
-	err := marshalJSON(w, ResJson)
-	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+	if errDecode != nil {
+		log.Printf("Error decoding parameters: %s", errDecode)
+		writeErrorResponse(w, http.StatusBadRequest, "error decoding JSON")
 		return
 	}
+	//case for minimum possible email length a@a.aa
+	if len(params.Email) < 5 {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid email submitted")
+		return
+	}
+	//basic email formatting checks
+	if !validateEmail(params.Email) {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid email submitted")
+		return
+	}
+
+	pwd, errHash := auth.HashPassword(params.Password)
+	if errHash != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "error hashing password")
+		return
+	}
+
+	res, err := api.Db.CreateUser(r.Context(), database.CreateUserParams{
+		ID:             uuid.New(),
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		Email:          params.Email,
+		HashedPassword: pwd,
+	})
+	if err != nil {
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	ResJson := models.User{
+		ID:        res.ID,
+		CreatedAt: res.CreatedAt,
+		UpdatedAt: res.UpdatedAt,
+		Email:     res.Email,
+	}
+
+	log.Printf("User: %s created with ID %v", res.Email, res.ID)
+	writeSuccessResponse(w, http.StatusCreated, ResJson)
+
 }
 
 func UserLogin(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
 	type reqParams struct {
-		Password         string `json:"password"`
-		Email            string `json:"email"`
-		ExpiresInSeconds int    `json:"expires_in_seconds"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	params := reqParams{}
 	errDecode := decodeJSONBody(r, &params)
-	var ResJson any
-	var StatusCode = http.StatusOK
-	switch {
-	case errDecode != nil:
-		{
-			log.Printf("Error decoding parameters: %s", errDecode)
-			StatusCode = http.StatusBadRequest
-			ResJson = models.ErrorBody{
-				Error: "error decoding JSON",
-			}
-		}
-	default:
-		userInfo, err := api.Db.GetUserPassword(r.Context(), params.Email)
-		if err != nil {
-			log.Printf("Error on database: %v", err)
-			StatusCode = http.StatusInternalServerError
-			ResJson = models.ErrorBody{
-				Error: "database error reported",
-			}
-		} else {
-			err = auth.CheckPasswordHash(userInfo.HashedPassword, params.Password)
-			if err != nil {
-				StatusCode = http.StatusUnauthorized
-				ResJson = models.ErrorBody{
-					Error: "Incorrect email or password",
-				}
-			} else {
-				ExpiresIn := 1 * time.Hour
-				if params.ExpiresInSeconds != 0 {
-					ExpiresIn = time.Duration(params.ExpiresInSeconds * int(time.Second))
-				}
-				newToken, err := auth.MakeJWT(userInfo.ID, api.Token, ExpiresIn)
-				if err != nil {
-					StatusCode = http.StatusInternalServerError
-					ResJson = models.ErrorBody{
-						Error: "bearer token creation failed",
-					}
-				} else {
-					StatusCode = http.StatusOK
-					ResJson = models.User{
-						ID:        userInfo.ID,
-						CreatedAt: userInfo.CreatedAt,
-						UpdatedAt: userInfo.UpdatedAt,
-						Email:     userInfo.Email,
-						Token:     newToken,
-					}
-				}
-			}
-		}
-	}
 
-	w.WriteHeader(StatusCode)
-	err := marshalJSON(w, ResJson)
-	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.Write([]byte(`{"error: Something went wrong converting JSON"}`))
+	if errDecode != nil {
+		log.Printf("Error decoding parameters: %s", errDecode)
+		writeErrorResponse(w, http.StatusBadRequest, "error decoding JSON")
 		return
 	}
+
+	userInfo, err := api.Db.GetUserPassword(r.Context(), params.Email)
+	if err != nil {
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+	}
+	err = auth.CheckPasswordHash(userInfo.HashedPassword, params.Password)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "incorrect email or password")
+		return
+	}
+
+	ExpiresIn := 1 * time.Hour
+	newToken, err := auth.MakeJWT(userInfo.ID, api.Token, ExpiresIn)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "jwt token creation failed")
+		return
+	}
+
+	newRefreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "refresh token creation failed")
+		return
+	}
+	//update database with token. No err handling on ParseDuration because I'm confident that won't error
+	duration, err2 := time.ParseDuration("1440h")
+	log.Println(err2)
+	err = api.Db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:     newRefreshToken,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    userInfo.ID,
+		ExpiresAt: time.Now().Add(duration),
+	})
+
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	ResJson := models.User{
+		ID:           userInfo.ID,
+		CreatedAt:    userInfo.CreatedAt,
+		UpdatedAt:    userInfo.UpdatedAt,
+		Email:        userInfo.Email,
+		Token:        newToken,
+		RefreshToken: newRefreshToken,
+	}
+	writeSuccessResponse(w, http.StatusOK, ResJson)
+}
+
+func UpdateAccessToken(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	tokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized user, no token")
+		return
+	}
+
+	tokenDetails, err := api.Db.GetUserFromRefreshToken(r.Context(), tokenString)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Error on database. Token not found: %v", err)
+			writeErrorResponse(w, http.StatusUnauthorized, "error: user token does not exist")
+			return
+		}
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	if tokenDetails.RevokedAt.Valid {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized user, token revoked")
+		return
+	}
+
+	if time.Now().After(tokenDetails.ExpiresAt) {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized user, expired token")
+		return
+	}
+
+	expiresIn := 1 * time.Hour
+	newAccessToken, err := auth.MakeJWT(tokenDetails.UserID, api.Token, expiresIn)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "access token creation failed")
+		return
+	}
+	ResJson := models.Token{
+		Token: newAccessToken,
+	}
+	writeSuccessResponse(w, http.StatusOK, ResJson)
+}
+
+func RevokeRefreshToken(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	tokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "no token found or incorrect token string")
+		return
+	}
+
+	err = api.Db.UpdateRefreshToken(r.Context(), database.UpdateRefreshTokenParams{
+		RevokedAt: sql.NullTime{
+			Time:  time.Now(),
+			Valid: true,
+		},
+		UpdatedAt: time.Now(),
+		Token:     tokenString,
+	})
+	if err != nil {
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+	userID, err := api.Db.GetUserFromRefreshToken(r.Context(), tokenString)
+	if err != nil {
+		log.Printf("Token revoked successfully, but couldn't retrieve user ID for logging: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+	log.Printf("Token for user '%v' revoked", userID.UserID)
+	writeSuccessResponse(w, http.StatusNoContent, "")
 }

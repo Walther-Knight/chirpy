@@ -13,6 +13,7 @@ type User struct {
 	Email          string    `json:"email"`
 	HashedPassword string    `json:"password"`
 	Token          string    `json:"token"`
+	RefreshToken   string    `json:"refresh_token"`
 }
 
 type ErrorBody struct {
@@ -25,4 +26,8 @@ type Chirp struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	Body      string    `json:"body"`
 	UserID    string    `json:"user_id"`
+}
+
+type Token struct {
+	Token string `json:"token"`
 }
