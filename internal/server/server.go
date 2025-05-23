@@ -27,6 +27,7 @@ func Start(cfg *middleware.ApiConfig) error {
 	newMux.HandleFunc("POST /api/chirps", func(w http.ResponseWriter, r *http.Request) { api.NewChirp(cfg, w, r) })
 	newMux.HandleFunc("GET /api/chirps", func(w http.ResponseWriter, r *http.Request) { api.GetAllChirps(cfg, w, r) })
 	newMux.HandleFunc("POST /api/users", func(w http.ResponseWriter, r *http.Request) { api.NewUser(cfg, w, r) })
+	newMux.HandleFunc("PUT /api/users", func(w http.ResponseWriter, r *http.Request) { api.UpdateUser(cfg, w, r) })
 	newMux.Handle("/app/", cfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("./static")))))
 
 	log.Printf("Starting http server on %s\n", httpSrv.Addr)

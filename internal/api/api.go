@@ -100,8 +100,6 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 	params := validateBody{}
 	errDecode := decodeJSONBody(r, &params)
 
-	var ResJson any
-
 	if errDecode != nil {
 		log.Printf("Error decoding parameters: %s", errDecode)
 		writeErrorResponse(w, http.StatusBadRequest, "error decoding JSON")
@@ -131,7 +129,7 @@ func NewChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ResJson = models.Chirp{
+	ResJson := models.Chirp{
 		ID:        res.ID.String(),
 		CreatedAt: res.CreatedAt,
 		UpdatedAt: res.UpdatedAt,
@@ -423,4 +421,66 @@ func RevokeRefreshToken(api *middleware.ApiConfig, w http.ResponseWriter, r *htt
 	}
 	log.Printf("Token for user '%v' revoked", userID.UserID)
 	writeSuccessResponse(w, http.StatusNoContent, "")
+}
+
+func UpdateUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
+	type reqParams struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	params := reqParams{}
+	errDecode := decodeJSONBody(r, &params)
+
+	if errDecode != nil {
+		log.Printf("Error decoding parameters: %s", errDecode)
+		writeErrorResponse(w, http.StatusBadRequest, "error decoding JSON")
+		return
+	}
+
+	if params.Password == "" || params.Email == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid request both password and email must be updated")
+		return
+	}
+
+	newHash, err := auth.HashPassword(params.Password)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "error hashing password")
+		return
+	}
+
+	res, err := api.Db.UpdateUserPasswordEmail(r.Context(), database.UpdateUserPasswordEmailParams{
+		HashedPassword: newHash,
+		Email:          params.Email,
+		UpdatedAt:      time.Now(),
+	})
+
+	if err != nil {
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	tokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "missing token")
+		return
+	}
+
+	_, err = auth.ValidateJWT(tokenString, api.Token)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+
+	resJson := models.User{
+		ID:        res.ID,
+		CreatedAt: res.CreatedAt,
+		UpdatedAt: res.UpdatedAt,
+		Email:     res.Email,
+	}
+
+	writeSuccessResponse(w, http.StatusOK, resJson)
 }
