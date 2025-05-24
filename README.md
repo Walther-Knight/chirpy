@@ -1,21 +1,21 @@
 # chirpy
 boot.dev course content: Learn HTTP Servers in Go  
 
-#Administrative EndPoints: METHOD ENDPOINT APIFUNCTION  
+# Administrative EndPoints: METHOD ENDPOINT APIFUNCTION  
   
-##GET /api/healthz api.Health  
+## GET /api/healthz api.Health  
 Returns 200 when server is running.  
   
-##GET /admin/metricscfg.HitTotal  
+## GET /admin/metricscfg.HitTotal  
 Returns 200 and number of hits on /app path  
   
-##POST /admin/reset cfg.Reset  
+## POST /admin/reset cfg.Reset  
 Returns 200 and resets hit counter on /app  
 **Resets users table in database (requirement for course, this would be not available in an actual system)**  
   
-#Application EndPoints  
+# Application EndPoints  
   
-##POST /api/login api.UserLogin  
+## POST /api/login api.UserLogin  
 ```
 Expects body:
 {
@@ -39,19 +39,19 @@ type User struct {
 }
 ```  
   
-##POST /api/refresh api.UpdateAccessToken  
+## POST /api/refresh api.UpdateAccessToken  
 Expects "Authorization: Bearer" header with valid refresh token  
   
 Returns 200 and a new access token  
   
-##POST /api/revoke api.RevokeRefreshToken  
+## POST /api/revoke api.RevokeRefreshToken  
 Expects "Authorization: Bearer" header with valid refresh token  
   
 Revokes refresh token  
   
 Returns 204 and no body  
   
-##GET /api/chirps/{chirpID} api.GetChirp  
+## GET /api/chirps/{chirpID} api.GetChirp  
 Expects /api/chirps/{chirpID} where {chirpID} is the UUID for a chirp  
   
 Looks up the specific Chirp and returns 404 if not found  
@@ -67,7 +67,7 @@ Chirp struct {
 }
 ```
   
-##DELETE /api/chirps/{id} api.DeleteChirp  
+## DELETE /api/chirps/{id} api.DeleteChirp  
 Expects /api/chirps/{chirpID} where {chirpID} is the UUID for a chirp and a valid access token in "Authorization: Bearer" header  
   
 Validates token and that user is author of chirp  
@@ -75,7 +75,7 @@ Chirp is deleted from the database
   
 Returns 204 and blank body on success  
   
-##POST /api/chirps api.NewChirp  
+## POST /api/chirps api.NewChirp  
 ```
 Expects valid access token in "Authorization: Bearer" header  
 Expects body:
@@ -99,7 +99,7 @@ type Chirp struct {
 }
 ```
   
-##GET /api/chirps api.GetAllChirps  
+## GET /api/chirps api.GetAllChirps  
 Accepts an optional author_id parameter. Parameter is the UUID of a valid user.  
 Accepts an optional sort parameter. Valid values "asc" or "desc". Defaults to "asc".  
   
@@ -118,7 +118,7 @@ type Chirp struct {
 }
 ```
   
-##POST /api/users api.NewUser  
+## POST /api/users api.NewUser  
 ```
 Expects body:
     {
@@ -141,7 +141,7 @@ type User struct {
 }
 ```
   
-##PUT /api/users api.UpdateUser  
+## PUT /api/users api.UpdateUser  
 ```
 Expects valid access token in "Authorization: Bearer" header  
 Expects body:
@@ -164,7 +164,7 @@ type User struct {
 }
 ```
   
-##POST /api/polka/webhooks api.UpdateChirpyRed  
+## POST /api/polka/webhooks api.UpdateChirpyRed  
 3rd party payment API webhook.  
 ```
 Expects valid ApiKey header.
