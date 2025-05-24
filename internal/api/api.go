@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -182,6 +183,13 @@ func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Requ
 		ResJson = append(ResJson, chirpModel)
 	}
 
+	// SQL Query returns chirps in ASC order by created_at by default
+	// In memory sorting is only required for DESC sort parameter
+	s = r.URL.Query().Get("sort")
+	if s == "desc" {
+		sort.Slice(ResJson, func(i, j int) bool { return ResJson[i].CreatedAt.After(ResJson[j].CreatedAt) })
+	}
+
 	writeSuccessResponse(w, http.StatusOK, ResJson)
 }
 
@@ -189,7 +197,7 @@ func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 
-	chirpID, err := uuid.Parse(r.PathValue("id"))
+	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
 	if err != nil {
 		log.Printf("Error on database: %v", err)
 		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
@@ -510,7 +518,7 @@ func DeleteChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	chirpID, err := uuid.Parse(r.PathValue("id"))
+	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
 	if err != nil {
 		log.Printf("Error on database: %v", err)
 		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
