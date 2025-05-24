@@ -144,15 +144,34 @@ func GetAllChirps(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 
-	res, err := api.Db.GetAllChirps(r.Context())
-	if err != nil {
-		log.Printf("Error on database: %v", err)
-		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
-		return
+	s := r.URL.Query().Get("author_id")
+	var Res []database.Chirp
+	var err error
+	if s == "" {
+		Res, err = api.Db.GetAllChirps(r.Context())
+		if err != nil {
+			log.Printf("Error on database: %v", err)
+			writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+			return
+		}
+	} else {
+		userId, err := uuid.Parse(s)
+		if err != nil {
+			log.Printf("Error on database: %v", err)
+			writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+			return
+		}
+
+		Res, err = api.Db.GetAllChirpsByAuthor(r.Context(), userId)
+		if err != nil {
+			log.Printf("Error on database: %v", err)
+			writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+			return
+		}
 	}
 
 	ResJson := []models.Chirp{}
-	for _, chirp := range res {
+	for _, chirp := range Res {
 		chirpModel := models.Chirp{
 			ID:        chirp.ID.String(),
 			CreatedAt: chirp.CreatedAt,
