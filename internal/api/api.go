@@ -533,7 +533,20 @@ func UpdateChirpyRed(api *middleware.ApiConfig, w http.ResponseWriter, r *http.R
 			UserID string `json:"user_id"`
 		} `json:"data"`
 	}
+
 	w.Header().Set("Content-Type", "application/json")
+
+	reqKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "missing ApiKey")
+		return
+	}
+
+	if reqKey != api.PolkaSecret {
+		writeErrorResponse(w, http.StatusUnauthorized, "invalid ApiKey")
+		return
+	}
+
 	params := reqParams{}
 	errDecode := decodeJSONBody(r, &params)
 
