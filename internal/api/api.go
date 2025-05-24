@@ -259,10 +259,11 @@ func NewUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) 
 	}
 
 	ResJson := models.User{
-		ID:        res.ID,
-		CreatedAt: res.CreatedAt,
-		UpdatedAt: res.UpdatedAt,
-		Email:     res.Email,
+		ID:          res.ID,
+		CreatedAt:   res.CreatedAt,
+		UpdatedAt:   res.UpdatedAt,
+		Email:       res.Email,
+		IsChirpyRed: res.IsChirpyRed.Bool,
 	}
 
 	log.Printf("User: %s created with ID %v", res.Email, res.ID)
@@ -330,6 +331,7 @@ func UserLogin(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request
 		CreatedAt:    userInfo.CreatedAt,
 		UpdatedAt:    userInfo.UpdatedAt,
 		Email:        userInfo.Email,
+		IsChirpyRed:  userInfo.IsChirpyRed.Bool,
 		Token:        newToken,
 		RefreshToken: newRefreshToken,
 	}
@@ -464,10 +466,11 @@ func UpdateUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Reques
 	}
 
 	resJson := models.User{
-		ID:        res.ID,
-		CreatedAt: res.CreatedAt,
-		UpdatedAt: res.UpdatedAt,
-		Email:     res.Email,
+		ID:          res.ID,
+		CreatedAt:   res.CreatedAt,
+		UpdatedAt:   res.UpdatedAt,
+		Email:       res.Email,
+		IsChirpyRed: res.IsChirpyRed.Bool,
 	}
 
 	writeSuccessResponse(w, http.StatusOK, resJson)
@@ -521,4 +524,49 @@ func DeleteChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Reque
 
 	writeSuccessResponse(w, http.StatusNoContent, "")
 
+}
+
+func UpdateChirpyRed(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
+	type reqParams struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserID string `json:"user_id"`
+		} `json:"data"`
+	}
+	w.Header().Set("Content-Type", "application/json")
+	params := reqParams{}
+	errDecode := decodeJSONBody(r, &params)
+
+	if errDecode != nil {
+		log.Printf("Error decoding parameters: %s", errDecode)
+		writeErrorResponse(w, http.StatusBadRequest, "error decoding JSON")
+		return
+	}
+
+	if params.Event != "user.upgraded" {
+		writeErrorResponse(w, http.StatusNoContent, "")
+		return
+	}
+
+	userID, err := uuid.Parse(params.Data.UserID)
+	if err != nil {
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	err = api.Db.UpdateChirpyRed(r.Context(), userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Error on database: %v", err)
+			writeErrorResponse(w, http.StatusNotFound, "error: Chirp ID does not exist")
+			return
+		}
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	log.Printf("User %s upgraded to Chirpy Red.", userID)
+	writeSuccessResponse(w, http.StatusNoContent, "")
 }
