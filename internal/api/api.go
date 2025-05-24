@@ -170,18 +170,6 @@ func GetChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 
-	userToken, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized user, login and try again")
-		return
-	}
-
-	_, err = auth.ValidateJWT(userToken, api.Token)
-	if err != nil {
-		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized user, login and try again")
-		return
-	}
-
 	chirpID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		log.Printf("Error on database: %v", err)
@@ -483,4 +471,54 @@ func UpdateUser(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Reques
 	}
 
 	writeSuccessResponse(w, http.StatusOK, resJson)
+}
+
+func DeleteChirp(api *middleware.ApiConfig, w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	tokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "missing token")
+		return
+	}
+
+	userID, err := auth.ValidateJWT(tokenString, api.Token)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+
+	chirpID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	chirpDetails, err := api.Db.GetChirp(r.Context(), chirpID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Error on database: %v", err)
+			writeErrorResponse(w, http.StatusNotFound, "error: Chirp ID does not exist")
+			return
+		}
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	if chirpDetails.UserID != userID {
+		writeErrorResponse(w, http.StatusForbidden, "user not authorized to delete chirp")
+		return
+	}
+
+	err = api.Db.DeleteChirp(r.Context(), chirpID)
+	if err != nil {
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	writeSuccessResponse(w, http.StatusNoContent, "")
+
 }
