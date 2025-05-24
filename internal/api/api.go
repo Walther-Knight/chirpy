@@ -554,14 +554,20 @@ func UpdateChirpyRed(api *middleware.ApiConfig, w http.ResponseWriter, r *http.R
 		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
 		return
 	}
-
-	err = api.Db.UpdateChirpyRed(r.Context(), userID)
+	validUser, err := api.Db.GetUserFromID(r.Context(), userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("Error on database: %v", err)
-			writeErrorResponse(w, http.StatusNotFound, "error: Chirp ID does not exist")
+			writeErrorResponse(w, http.StatusNotFound, "error: User ID does not exist")
 			return
 		}
+		log.Printf("Error on database: %v", err)
+		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
+		return
+	}
+
+	err = api.Db.UpdateChirpyRed(r.Context(), validUser.ID)
+	if err != nil {
 		log.Printf("Error on database: %v", err)
 		writeErrorResponse(w, http.StatusInternalServerError, "database error reported")
 		return
