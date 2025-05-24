@@ -1,12 +1,14 @@
 # chirpy
 boot.dev course content: Learn HTTP Servers in Go  
+This project creates a theoretical messaging service called "Chirpy" which allows storage of messages using a RESTful API.  
+The backend has authentication and authorization in place and leverages Postgresql for storage of data.
 
 # Administrative EndPoints: METHOD ENDPOINT APIFUNCTION  
   
 ## GET /api/healthz api.Health  
 Returns 200 when server is running.  
   
-## GET /admin/metricscfg.HitTotal  
+## GET /admin/metrics cfg.HitTotal  
 Returns 200 and number of hits on /app path  
   
 ## POST /admin/reset cfg.Reset  
